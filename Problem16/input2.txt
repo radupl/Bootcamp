@@ -1,0 +1,2 @@
+This is another test 
+This text is in file2

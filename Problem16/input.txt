@@ -1,0 +1,5 @@
+This is line 1 of the file
+Also this is another line
+Insertion at position 3
+This is the third line
+
