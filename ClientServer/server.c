@@ -1,17 +1,32 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
+#include "utils.h"
 
-#define MAX_CLIENTS 5
+AcceptedSocket* accept_incoming_connection(int server_sockfd) {
 
-void error(const char *msg) {
-    // Displays error message using stderr
-    perror(msg);
-    exit(EXIT_FAILURE);
+    struct sockaddr_in cli_addr;
+    socklen_t cli_len = sizeof(cli_addr);
+    int client_socket = accept(server_sockfd, (struct sockaddr*) &cli_addr, &cli_len);
+
+    AcceptedSocket* accepted_socket = malloc(sizeof(AcceptedSocket));
+    accepted_socket->accepted_socket = client_socket;
+    accepted_socket->address = cli_addr;
+    accepted_socket->accepted_success = client_socket > 0;
+
+    if (!accepted_socket->accepted_success) {
+        accepted_socket->error = client_socket;
+    } else {
+        printf("[Accept] Client connected!\n");
+    }
+
+    return accepted_socket;
+}
+
+void start_accepting_connections(int server_socket_fd) {
+
+    while (1) {
+        AcceptedSocket *client_socket = accept_incoming_connection(server_socket_fd);
+        accepted_sockets[accepted_sockets_count++] = *client_socket;
+        recieve_and_print_data_in_separate_thread(client_socket);
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -24,16 +39,16 @@ int main(int argc, char *argv[]) {
     }
 
     int sockfd, newsockfd, portno;
-    char buffer[255];
 
-    struct sockaddr_in serv_addr, cli_addr;
-    socklen_t cli_len;
+    struct sockaddr_in serv_addr; 
 
     // Create a socket
     // IPv4, TCP/IP, 0 (default)
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
-        error("Error opening socket");
+        error("Error opening socket\n");
+    } else {
+        printf("[Socket] Open!\n");
     }
 
     bzero((char*)&serv_addr, sizeof(serv_addr));
@@ -47,46 +62,17 @@ int main(int argc, char *argv[]) {
 
     // Bind the socket to a local address
     if (bind(sockfd, (struct sockaddr*) &serv_addr, sizeof(serv_addr)) < 0) {
-        error("Binding error!");
+        error("Binding error!\n");
+    } else {
+        printf("[Bind] Binding succesful!\n");
     }
 
     // Listening for connection requests
     // Max queue before refusing connections is MAX_CLIENTS
-    listen(sockfd, MAX_CLIENTS);
+    int listen_result = listen(sockfd, MAX_CLIENTS);
 
-    cli_len = sizeof(cli_addr);
+    start_accepting_connections(sockfd);
 
-    newsockfd = accept(sockfd, (struct sockaddr*) &cli_addr, &cli_len);
-
-    if (newsockfd < 0) {
-        error("Error on accept!");
-    }
-
-    while (1) {
-        bzero(buffer, 255);
-
-        // Filling the buffer with the message from a client.
-        if (read(newsockfd, buffer, 255) < 0) {
-            error("Error reading from socket!");
-        }
-
-        printf("Client: %s", buffer);
-
-        // Clearing the buffer filled with message from a client.
-        bzero(buffer, 255);
-        // Filling the buffer with a message from the keyboard (as server).
-        fgets(buffer, 255, stdin);
-        // Write to client
-        if (write(newsockfd, buffer, strlen(buffer)) < 0) {
-            error("Error writing to socket!");
-        }
-        
-        if (strncmp("exit", buffer, 4) == 0) {
-            break;
-        }
-    }
-
-    close(newsockfd);
     close(sockfd);
 
     return 0;
